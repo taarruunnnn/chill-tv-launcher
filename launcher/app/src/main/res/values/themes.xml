@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark window background prevents a white flash on cold start. -->
+    <style name="Theme.PontLauncher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0C10</item>
+        <item name="android:colorBackground">#0B0C10</item>
+        <item name="android:navigationBarColor">#0B0C10</item>
+        <item name="android:statusBarColor">#0B0C10</item>
+    </style>
+</resources>
