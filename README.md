@@ -81,6 +81,54 @@ screenshots/
 
 ![Move mode](screenshots/move-mode.png)
 
+## Why it runs so well on weak hardware
+
+None of this is magic — it's about what the launcher *doesn't* do:
+
+- **It never touches the network.** No internet permission, no ads to fetch,
+  no recommendations to sync, no telemetry to upload. The stock launcher burns
+  RAM and CPU doing all four.
+- **No background services at all.** It's a single activity that draws a grid.
+  When you're in Netflix, Chill costs you nothing.
+- **App art is cached to disk, pre-scaled.** The slow part of any launcher on
+  a low-end TV is reading banner images out of every installed APK. Chill does
+  that once, saves the results, and cold-starts by decoding ~20 small PNGs
+  instead — the home screen is fully rendered ~2 s after the process is killed.
+- **Animations run on the GPU layer.** Focus scaling happens in
+  `graphicsLayer`, so a focus change never re-measures the layout — it's a
+  cheap transform even on a 2020-era Mali GPU.
+- **~800 KB installed, three Kotlin files.** Minified release build, one
+  Compose dependency, no icon-pack framework, no launcher "engine". Small
+  enough that Android's low-memory killer rarely bothers it, and instant to
+  reload when it does.
+- **It respects how TVs actually behave.** Manual long-press detection (many
+  IR remotes never send the key-repeat events Compose expects), banner-first
+  art like Android TV intends, overscan-safe margins, and a dark window
+  background so there's no white flash on start.
+
+## Tested on
+
+All of this was developed and verified end-to-end on real hardware:
+
+| | |
+|---|---|
+| TV | Realme 32" (Changhong DVB91RM, MediaTek chipset) |
+| OS | Android TV 11 (API 30) |
+| RAM | 1 GB (~90 MB free before debloating) |
+| CPU/ABI | armeabi-v7a (32-bit) |
+| Remote | Stock IR remote (no key-repeat on OK — the reason long-press is hand-rolled) |
+
+Verified scenarios: cold boot straight into the launcher after reboot and
+power loss; automatic relaunch with full art ~2 s after the process is killed
+under memory pressure; add/remove/reorder from the long-press menu persisting
+across restarts; app installs/uninstalls appearing without a restart; USB
+drive card appearing on mount and vanishing on eject; surviving a CloudStream
+and launcher upgrade in place.
+
+The launcher itself has no device-specific code: `minSdk 26` (Android 8.0+),
+pure Kotlin/Compose with no native libraries, so it should run on any Android
+TV box or panel. The *debloat package list* is the only model-specific part.
+
 ## Requirements
 
 - A computer with [`adb`](https://developer.android.com/tools/adb) (`brew
