@@ -37,8 +37,9 @@ There are three ways to fix a bloated Android TV, and two of them are bad:
    - install a purpose-built ~800 KB launcher with zero ads, zero telemetry,
      zero network access, that cold-starts in ~2 s on 1 GB RAM.
 
-The worst-case rollback story: run `restore.sh`, and the TV is byte-for-byte
-back to stock behavior. That's the whole reason this design was chosen.
+The worst-case rollback story: run `restore.sh`, and every package is put back
+exactly as it was before `debloat.sh` first touched the TV (from a state file
+saved on the first run). That's the whole reason this design was chosen.
 
 ## What removing the bloat actually gets you
 
@@ -133,6 +134,11 @@ across restarts; app installs/uninstalls appearing without a restart; USB
 drive card appearing on mount and vanishing on eject; surviving a CloudStream
 and launcher upgrade in place.
 
+Not yet run on this TV: the saved-state restore, `debloat.sh --check`, the
+core-package guard and `launcher/install.sh` (added 2026-10-27). They were
+tested against a simulated `adb` covering apply, re-run, drift, restore,
+failed installs and a hijacked Home, but not on real hardware yet.
+
 The launcher itself has no device-specific code: `minSdk 26` (Android 8.0+),
 pure Kotlin/Compose with no native libraries, so it should run on any Android
 TV box or panel. The *debloat package list* is the only model-specific part.
@@ -199,6 +205,13 @@ stock one, so the TV is never left without a Home. Press HOME — you're in Chil
 (The release build is deliberately debug-signed: it's a sideloaded personal
 build, and this keeps `adb install -r` upgrades painless.)
 
+**Undo the launcher:**
+
+```bash
+adb shell pm enable com.google.android.tvlauncher
+adb uninstall com.tarun.pontlauncher
+```
+
 **5. Check the remote.** Press Input, the app buttons, Settings and the mic
 button once. On some firmware the stock launcher is what answers those, so a
 button can go dead with it disabled.
@@ -207,13 +220,6 @@ button can go dead with it disabled.
 on your Wi-Fi. Turn *Network debugging* off in Developer options (and revoke
 USB debugging authorisations), reboot, and confirm
 `adb connect <TV_IP>:5555` is refused.
-
-**Undo the launcher:**
-
-```bash
-adb shell pm enable com.google.android.tvlauncher
-adb uninstall com.tarun.pontlauncher
-```
 
 ## What survives what
 
@@ -253,7 +259,8 @@ with domain rules): Private DNS goes around it.
 
 [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) documents the bugs actually hit on this
 hardware — a random-restart bug caused by an earlier version of the debloat
-list, a clock that stops auto-updating, cache creep — each with the diagnosis
+list, a clock that stops auto-updating, cache creep, and videos going black
+mid-play (the low-memory killer on a 1 GB TV) — each with the diagnosis
 that found it and the exact commands that fixed it. It also collects the
 platform quirks worth knowing before you start debugging (why load average
 reads 100+ and why that's fine, where the real reboot history lives).
