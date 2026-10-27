@@ -133,8 +133,9 @@ count come from framework resources, not from `settings`. Changing them needs
 root or a framework overlay.
 
 Also worth knowing: a VPN app that auto-connects at boot can block NTP's UDP 123
-and reintroduce this. NordVPN is installed on the audited TV but was not
-connected during diagnosis, so it was not the cause here.
+and reintroduce this. NordVPN was installed on the audited TV but was not
+connected during diagnosis, so it was not the cause here. (It was later
+uninstalled for memory reasons — see #4.)
 
 ---
 
@@ -163,6 +164,82 @@ adb shell dumpsys diskstats     # "Package Names" and "Cache Sizes" arrays line 
 
 ---
 
+## 4. Black screen mid-video, and "TV restarted by itself" — out of memory
+
+**Status:** improved 2026-08-04 · **Cause:** 1 GB of RAM vs. apps that keep growing
+
+### Symptom
+
+A video goes black partway through (no error dialog), or the whole TV blanks
+and comes back at the launcher. It started after months of working fine.
+
+### Root cause
+
+The TV boots with only ~40 MB free. When the working set grows past that, the
+kernel's low-memory killer kills the **foreground** app: the process dies while
+`mResumedActivity` still points at it, which shows as a black screen, not a
+crash. Caught live: YouTube missing from the process table,
+`Free memory is -9176kB above reserved`, and the same cascade taking Netflix.
+
+Under heavier pressure `system_server` itself dies:
+
+```
+*** FATAL EXCEPTION IN SYSTEM PROCESS ...
+java.lang.OutOfMemoryError ... at Parcel.nativeWriteBlob / UsageEvents.writeToParcel
+```
+
+That is a runtime restart, not a reboot: a `SYSTEM_RESTART` dropbox entry,
+unbroken `uptime`, and `persist.sys.boot.reason.history` unchanged. **Every
+mysterious `adb: device offline` drop is one of these** — it kills the adb
+session too. Loading Netflix + YouTube (playing) + Hotstar in quick succession
+reproduces it reliably.
+
+Why it appeared out of nowhere: the firmware never changed, but every big app
+auto-updated past what shipped with it — Play Store 45.8 → 52.4, Play Services
+25.14 → 26.26 are now the largest consumers (~200–350 MB together). The
+low-memory killer is a cliff, not a slope.
+
+### Fix
+
+The two largest non-essential processes went:
+
+```bash
+adb shell pm disable-user --user 0 com.homwee.synckey   # 86 MB resident; now in debloat.sh
+adb uninstall com.nordvpn.android                       # 81 MB resident, not even connected
+```
+
+`com.homwee.synckey` was originally classified NEVER TOUCH because of its
+name. Its permissions say otherwise: `INTERNET`, Firebase push,
+`BIND_GET_INSTALL_REFERRER_SERVICE`, `REAL_GET_TASKS` — telemetry/attribution,
+with no input, display, tuner or DRM permissions. Widevine and Netflix DRM run
+in their own vendor HALs. (CleanYourTV's AI PONT lists still say keep it; this
+TV's evidence says otherwise, but check your own set.)
+
+Verified after: Netflix and Hotstar launch, YouTube plays a full video **with
+Netflix resident** (the original failure) with 0 low-memory kills, and the IR
+remote and keypad are still registered.
+
+### What doesn't work — don't bother
+
+- Disabling apps' `BOOT_COMPLETED` receivers: on all three streaming apps it's
+  just AndroidX WorkManager. Netflix is woken by TV-firmware receivers and FCM;
+  force-stopping it is futile, it's back within seconds.
+- `pm disable-user` on a *component* of another app: Android 11 answers
+  `SecurityException: Shell cannot change component state`. Needs root.
+
+### Reading it correctly
+
+Judge success by whether the low-memory killer kills the foreground app, **not**
+by free memory: Android refills freed RAM immediately (still ~35 MB free after
+reclaiming 86 MB, and that's fine). And don't credit a fix without checking
+timestamps — two crash loops here stopped on their own before a change that
+looked like it fixed them.
+
+`com.homwee.dmt.upgrade` crashing ~22–25 s after each restart looks like a
+cause but is a symptom.
+
+---
+
 ## Debugging notes for this platform
 
 Things that cost time to figure out, worth knowing before you chase a ghost:
@@ -182,6 +259,12 @@ Things that cost time to figure out, worth knowing before you chase a ghost:
   ```
 - **`exec-out screencap` emits garbage on this TV.** Use
   `adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png`.
+- **Netflix, Hotstar, Live TV and HDMI screenshot as 0 bytes.** They set
+  `FLAG_SECURE` / use a protected video layer; that's not a failure. Check
+  `dumpsys activity activities | grep mResumedActivity` instead.
+- **Test every debloat change with a reboot**, and wait ~15 s (or
+  `adb shell sync`) before rebooting: package state hits disk ~10 s after a
+  change. Issue #1 only showed itself after a reboot.
 - **Check nobody's watching before sending key events:**
   ```bash
   adb shell dumpsys activity activities | grep mResumedActivity

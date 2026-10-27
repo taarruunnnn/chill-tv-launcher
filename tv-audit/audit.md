@@ -36,6 +36,7 @@
 | com.homwee.multiscreenshare | OEM screen share (second one) |
 | com.homwee.store | OEM app store |
 | com.cltv.fast | Free ad-supported channels app |
+| com.homwee.synckey | OEM telemetry/attribution, 86 MB resident (added 2026-08-04, see KNOWN-ISSUES.md #4) |
 
 ## REMOVE — unused Google apps (per user choices, 2026-07-18)
 
@@ -64,6 +65,9 @@
 - `com.google.android.webview`, `packageinstaller`, `permissioncontroller`, `inputmethod.latin` (keyboard), `tts`
 - `com.google.android.apps.mediashell` — **Chromecast (user: keep)**
 - `com.google.android.tungsten.setupwraith`, `partnersetup`, `sss.authbridge`, `onetimeinitializer`, `modulemetadata`, `ext.*`, `frameworkpackagestubs`, `boot.appsplashscreen`
-- `com.homwee.dmt.upgrade` (firmware OTA), `com.homwee.factory`, `com.homwee.synckey`, `com.homwee.overlay.tvservice`
+- `com.homwee.dmt.upgrade` (firmware OTA), `com.homwee.factory`, `com.homwee.overlay.tvservice`
+- ~~`com.homwee.synckey`~~ — **reclassified REMOVE 2026-08-04.** Listed here on its name alone; its permissions
+  are telemetry/attribution (INTERNET, Firebase push, install referrer, REAL_GET_TASKS), it was 86 MB resident,
+  and removing it left the remote, playback and DRM working. See KNOWN-ISSUES.md #4.
 - `com.android.tv.settings`, `com.mstar.android.tv.disclaimercustomization`, overlays/RROs
-- User apps: Netflix, Hotstar, VLC, CloudStream, NordVPN, YouTube TV
+- User apps: Netflix, Hotstar, VLC, CloudStream, YouTube TV (NordVPN was uninstalled 2026-08-04 for memory)

@@ -50,6 +50,10 @@ From the audit of this TV (see [`tv-audit/audit.md`](tv-audit/audit.md)):
   [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md).)
 - `tv.anoki.acr.controller` — **ACR: watches what's on your screen and phones
   home.** This alone is worth the exercise.
+- `com.homwee.synckey` — OEM telemetry/attribution (Firebase push, install
+  referrer, task watching), **86 MB resident** — the single biggest reason
+  this TV was killing the app you were watching. See
+  [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md#4-black-screen-mid-video-and-tv-restarted-by-itself--out-of-memory).
 - A dozen OEM apps (store, screen-share ×2, file explorer, help, "AI"
   service…) idling in the background of a device with ~90 MB free RAM.
 
@@ -57,8 +61,9 @@ From the audit of this TV (see [`tv-audit/audit.md`](tv-audit/audit.md)):
 
 ```
 tv-audit/        The audit: every package classified REMOVE / KEEP / NEVER TOUCH
-debloat/         debloat.sh (safe to re-run anytime) + restore.sh (full undo)
-launcher/        "Chill" — the launcher, Kotlin + Jetpack Compose, minSdk 26
+debloat/         debloat.sh (safe to re-run anytime, --check after an OTA) + restore.sh (full undo)
+launcher/        "Chill" — the launcher, Kotlin + Jetpack Compose, minSdk 26;
+                 install.sh makes it Home safely
 KNOWN-ISSUES.md  Bugs hit on real hardware, their diagnosis and fixes
 screenshots/
 ```
@@ -166,21 +171,42 @@ Anything you don't recognize: look it up before touching it. Keep the
 cd debloat && ./debloat.sh <TV_IP>
 ```
 
-Idempotent — run it again after every firmware update. Regret something?
-`./restore.sh <TV_IP>` brings everything back.
+Idempotent — run it again after every firmware update. Before its first change
+it saves what each listed package looked like to `debloat/state/<tv serial>.txt`
+(keyed by serial, not IP, because DHCP moves TVs around); keep that file.
+Regret something? `./restore.sh <TV_IP>` puts back exactly that state —
+including leaving disabled anything you had disabled yourself beforehand.
+
+The script refuses to run if the list ever contains an Android core package
+(permission controller, package installer, SystemUI, providers…): removing
+those can leave a TV that never boots again.
+
+**Then reboot and test.** Wait ~15 s first — Android writes package state to
+disk about ten seconds after a change, so an immediate reboot boots the old
+state. The worst bug this repo ever hit
+([KNOWN-ISSUES #1](KNOWN-ISSUES.md)) was invisible until after a reboot.
 
 **4. Install the launcher and make it home:**
 
 ```bash
 cd launcher && ./gradlew assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
-adb shell am start -n com.tarun.pontlauncher/.MainActivity   # check it opens
-adb shell pm disable-user --user 0 com.google.android.tvlauncher
+./install.sh <TV_IP>
 ```
 
-Press HOME — you're in Chill. (The release build is deliberately debug-signed:
-it's a sideloaded personal build, and this keeps `adb install -r` upgrades
-painless.)
+`install.sh` installs Chill, proves it starts, and only then disables the stock
+launcher — and if HOME doesn't resolve to Chill afterwards, it re-enables the
+stock one, so the TV is never left without a Home. Press HOME — you're in Chill.
+(The release build is deliberately debug-signed: it's a sideloaded personal
+build, and this keeps `adb install -r` upgrades painless.)
+
+**5. Check the remote.** Press Input, the app buttons, Settings and the mic
+button once. On some firmware the stock launcher is what answers those, so a
+button can go dead with it disabled.
+
+**6. When you're done, close ADB.** Port 5555 is a plaintext shell for anyone
+on your Wi-Fi. Turn *Network debugging* off in Developer options (and revoke
+USB debugging authorisations), reboot, and confirm
+`adb connect <TV_IP>:5555` is refused.
 
 **Undo the launcher:**
 
@@ -195,7 +221,7 @@ adb uninstall com.tarun.pontlauncher
 |---|---|---|
 | Reboot / power cut | ✅ | ✅ (TV boots straight into it) |
 | App updates | ✅ | ✅ |
-| Firmware (OTA) update | ⚠️ may partially revert — re-run `debloat.sh` | ✅ app survives; stock launcher may need re-disabling |
+| Firmware (OTA) update | ⚠️ may partially revert — `debloat.sh <TV_IP> --check` says what came back; re-run `debloat.sh` | ✅ app survives; stock launcher may need re-disabling (`install.sh` again) |
 | Factory reset | ❌ | ❌ (reinstall — 2 minutes) |
 
 ## Customizing
@@ -208,6 +234,21 @@ adb uninstall com.tarun.pontlauncher
 - USB card's target player: `openUsb()` in
   [`MainActivity.kt`](launcher/app/src/main/java/com/tarun/pontlauncher/MainActivity.kt).
 
+## Optional: ad-blocking DNS
+
+Android 9+ can send all DNS through an ad-blocking resolver, which catches ad
+and tracker domains inside apps too (not YouTube's ads — those come from the
+same domains as the video):
+
+```bash
+adb shell settings put global private_dns_specifier dns.adguard-dns.com
+adb shell settings put global private_dns_mode hostname
+# undo: adb shell settings put global private_dns_mode opportunistic
+```
+
+Skip this if your router already filters DNS (Pi-hole, AdGuard Home, a VPN
+with domain rules): Private DNS goes around it.
+
 ## Something broke?
 
 [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) documents the bugs actually hit on this
@@ -216,6 +257,15 @@ list, a clock that stops auto-updating, cache creep — each with the diagnosis
 that found it and the exact commands that fixed it. It also collects the
 platform quirks worth knowing before you start debugging (why load average
 reads 100+ and why that's fine, where the real reboot history lives).
+
+## Related
+
+[CleanYourTV](https://github.com/Gathin23/cleanyourtv) does the same job for
+hundreds of TV models, with tested debloat lists from contributors, a
+pure-Python ADB client, a privacy audit and a configurable launcher. If your TV
+isn't this Realme, start there. This repo's saved-state restore, `--check`,
+core-package guard and safe Home handover follow its approach. Its AI PONT
+lists independently found the partnercustomizer crash loop documented here.
 
 ## Disclaimer
 
