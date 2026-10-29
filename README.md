@@ -8,6 +8,8 @@ It was built for a Realme/Changhong 32" TV (DVB91RM, Android TV 11, 1 GB RAM,
 armv7) but the approach works on most Android TVs; only the package list needs
 auditing per model.
 
+Listed in the [CleanYourTV showcase](https://github.com/Gathin23/cleanyourtv/blob/main/SHOWCASE.md#home-screens-built-as-their-own-app).
+
 | | |
 |---|---|
 | ![Home](screenshots/home.png) | ![Long-press menu](screenshots/long-press-menu.png) |
